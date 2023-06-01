@@ -102,10 +102,11 @@ extern uint32_t cli_log_stat;
 
 /**
   * @brief  command line init.
-  * @param  handle to uart peripheral
+  * @param  *handle_uart	handle to uart peripheral
+  * @param	USART_IRQn 		IRQ number for the USART passed as argument in the handle
   * @retval null
   */
-void 		cli_init(UART_HandleTypeDef *handle_uart);
+void 		cli_init(UART_HandleTypeDef *handle_uart, uint8_t USART_IRQn);
 
 /**
   * @brief  command line task, schedule by sys. every 50ms

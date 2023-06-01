@@ -88,26 +88,26 @@ const char				cli_log_help[]				= "Controls which logs are displayed."
 													  "\n\t\"log on/off [CAT1 CAT2 CAT...]\" to enable/disable the logs for categories [CAT1 CAT2 CAT...]";
 bool 					cli_password_ok 			= false;
 volatile bool			cli_tx_isr_flag				= false; /*< This flag is used internally so that _write will not write text in the console if the previous call is not over yet */
-
+uint8_t					shell_USART_IRQn			= 0;
 /*******************************************************************************
  *
  * 	Internal functions declaration
  *
  ******************************************************************************/
 
-static void 	cli_history_add			(char* buff);
-static uint8_t 	cli_history_show		(uint8_t mode, char** p_history);
-void 			HAL_UART_RxCpltCallback	(UART_HandleTypeDef * huart);
-static void 	cli_rx_handle			(shell_queue_s *rx_buff);
-static void 	cli_tx_handle			(void);
-uint8_t 		cli_help				(int argc, char *argv[]);
-uint8_t 		cli_clear				(int argc, char *argv[]);
-uint8_t 		cli_reset				(int argc, char *argv[]);
-uint8_t 		cli_log					(int argc, char *argv[]);
-void 			cli_add_command			(const char *command, const char *help, uint8_t (*exec)(int argc, char *argv[]));
-void 			greet					(void);
-void 			cli_disable_log_entry	(char *str);
-void 			cli_enable_log_entry	(char *str);
+static void 	cli_history_add				(char* buff);
+static uint8_t 	cli_history_show			(uint8_t mode, char** p_history);
+void 			HAL_UART_RxCpltCallback		(UART_HandleTypeDef * huart);
+static void 	cli_rx_handle				(shell_queue_s *rx_buff);
+static void 	cli_tx_handle				(void);
+uint8_t 		cli_help					(int argc, char *argv[]);
+uint8_t 		cli_clear					(int argc, char *argv[]);
+uint8_t 		cli_reset					(int argc, char *argv[]);
+uint8_t 		cli_log						(int argc, char *argv[]);
+void 			cli_add_command				(const char *command, const char *help, uint8_t (*exec)(int argc, char *argv[]));
+void 			__attribute__((weak)) greet	(void);
+void 			cli_disable_log_entry		(char *str);
+void 			cli_enable_log_entry		(char *str);
 
 /*******************************************************************************
  *
@@ -132,13 +132,13 @@ int _write(int file, char *data, int len){
 		cli_tx_isr_flag = true;
 		/* Disable interrupts to prevent UART from throwing an RX interrupt while the peripheral is locked as
 		 * this would prevent the RX interrupt from restarting HAL_UART_Receive_IT  */
-		HAL_NVIC_DisableIRQ(USART1_IRQn);
+		HAL_NVIC_DisableIRQ(shell_USART_IRQn);
 
 		/* Transmits with interrupts. This must be done this way so that we can re-activate USART interrupts
 		 * before the transfer terminates so that we can continue reading from the terminal*/
 		status = HAL_UART_Transmit_IT(huart_shell, (uint8_t *)data, len);
 
-		HAL_NVIC_EnableIRQ(USART1_IRQn);
+		HAL_NVIC_EnableIRQ(shell_USART_IRQn);
 
 		/* Wait for the transfer to terminate*/
 		while(cli_tx_isr_flag == true){
@@ -146,9 +146,9 @@ int _write(int file, char *data, int len){
 		}
 	}else{
 		/* We are called from an interrupt, using Transmit_IT would not work */
-		HAL_NVIC_DisableIRQ(USART1_IRQn);
+		HAL_NVIC_DisableIRQ(shell_USART_IRQn);
 		status = HAL_UART_Transmit(huart_shell, (uint8_t *)data, len, 1000);
-		HAL_NVIC_EnableIRQ(USART1_IRQn);
+		HAL_NVIC_EnableIRQ(shell_USART_IRQn);
 	}
 
 
@@ -261,9 +261,10 @@ static uint8_t cli_history_show(uint8_t mode, char** p_history)
     return err;
 }
 
-void cli_init(UART_HandleTypeDef *handle_uart)
+void cli_init(UART_HandleTypeDef *handle_uart, uint8_t USART_IRQn)
 {
 	huart_shell = handle_uart;
+	shell_USART_IRQn  = USART_IRQn;
 	shell_queue_init(&cli_rx_buff);
     memset((uint8_t *)&history, 0, sizeof(history));
 
